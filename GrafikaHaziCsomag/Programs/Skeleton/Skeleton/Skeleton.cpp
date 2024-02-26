@@ -1,5 +1,5 @@
-//=============================================================================================
-// Mintaprogram: Z�ld h�romsz�g. Ervenyes 2019. osztol.
+﻿//=============================================================================================
+// Mintaprogram: Z�ld h�romsz�g. Ervenyes 2019. osztol.
 //
 // A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
 // Tilos:
@@ -34,7 +34,7 @@
 #include "framework.h"
 
 // vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
-const char * const vertexSource = R"(
+const char* const vertexSource = R"(
 	#version 330
 	precision highp float;		// normal floats, makes no difference on desktop computers
 
@@ -47,7 +47,7 @@ const char * const vertexSource = R"(
 )";
 
 // fragment shader in GLSL
-const char * const fragmentSource = R"(
+const char* const fragmentSource = R"(
 	#version 330
 	precision highp float;	// normal floats, makes no difference on desktop computers
 	
@@ -60,29 +60,342 @@ const char * const fragmentSource = R"(
 )";
 
 GPUProgram gpuProgram; // vertex and fragment shaders
-unsigned int vao;	   // virtual world on the GPU
+
+class Object {
+protected:
+	unsigned int vao, vbo; // GPU
+	std::vector<vec3> vtx; // CPU
+
+public:
+
+	//Constructor
+	Object() {
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
+
+		glGenBuffers(1, &vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+	}
+
+
+	std::vector<vec3>& getVtx() { return vtx; }
+
+	// CPU -> GPU
+	void updateGPU() {
+		glBindVertexArray(vao);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBufferData(GL_ARRAY_BUFFER, vtx.size() * sizeof(vec3), &vtx[0], GL_DYNAMIC_DRAW);
+	}
+
+
+	// Draw
+	void Draw(int type, vec3 color) {
+		if (vtx.size() > 0) {
+			glBindVertexArray(vao);
+			gpuProgram.setUniform(color, "color");
+			glDrawArrays(type, 0, vtx.size());
+		}
+	}
+};
+
+class PointCollection : public Object {
+
+
+public:
+	PointCollection() : Object() {}
+
+	void addPoint(vec3 p) {
+		vtx.push_back(p);
+		printf("Point: %f, %f added \n", p.x, p.y );
+		updateGPU();
+	}
+
+	void Draw(vec3 color) {
+		Object::Draw(GL_POINTS, color);
+	}
+
+	vec3 findNearestPoint(vec3 p) {
+		float minDist = 1000;
+		vec3 nearest = vec3(0, 0, 0);
+
+		for (int i = 0; i < vtx.size(); i++) {
+				float dist = sqrt(pow(p.x - vtx[i].x, 2) + pow(p.y - vtx[i].y, 2));
+				if (dist < minDist) {
+					minDist = dist;
+					nearest = vtx[i];
+				}
+		}
+
+		float dist = sqrt(pow(p.x - nearest.x, 2) + pow(p.y - nearest.y, 2));
+
+		if (dist < 0.01) {
+
+		return nearest;
+		}
+		else
+		{
+			return vec3(0, 0, -1);
+		}
+	}
+
+};
+
+
+bool cmpVec3(vec3 v1, vec3 v2) {
+	if (v1.x == v2.x && v1.y == v2.y && v1.z == v2.z) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+class Line {
+
+	vec3 p1, p2;
+
+public:
+	Line() : p1(vec3(0, 0, -1)), p2(vec3(0, 0, -1)) {}
+
+	Line(vec3 p1, vec3 p2) : p1(p1), p2(p2) {
+	
+		printf("Line added\n ");
+		printf("\tImplicit: %f x + %f y + %f = 0 \n",(p2.y - p1.y), (p1.x - p2.x), (p2.x * p1.y) - (p1.x * p2.y));
+		printf("\tParametric: r(t) = (%f, %f) x + (%f, %f)t\n", p1.x, p2.y, p2.x - p1.x, p2.y - p1.y );
+	}
+
+
+	vec3 getP1() const { return p1; }
+	vec3 getP2() const { return p2; }
+	void setP1(vec3 p) { p1 = p; }
+	void setP2(vec3 p) { p2 = p; }
+
+	// Metszéspont meghatározása egy másik egyenessel
+	vec3 getIntersection(Line other) {
+	
+		float m1 = (p2.y - p1.y) / (p2.x - p1.x);
+		float m2 = (other.p2.y - other.p1.y) / (other.p2.x - other.p1.x);
+
+		if (m1 == m2) {
+			return vec3(0, 0, -1);
+		}
+
+		float b1 = p1.y - m1 * p1.x;
+		float b2 = other.p1.y - m2 * other.p1.x;
+
+		float x = (b2 - b1) / (m1 - m2);
+		float y = m1 * x + b1;
+
+
+		if (x < 1 && x > -1 && y > -1 && y < 1) {
+			return vec3(x, y, 1);
+		}
+		else {
+			return vec3(0, 0, -1);
+		}
+
+		
+
+	}
+
+	bool isPointOnLine(const vec3& point) const {
+		// Az egyenes egyenlete
+		float distance = fabs((p2.y - p1.y) * point.x - (p2.x - p1.x) * point.y + p2.x * p1.y - p2.y * p1.x) /
+			sqrt((p2.y - p1.y) * (p2.y - p1.y) + (p2.x - p1.x) * (p2.x - p1.x));
+
+		// Távolság összehasonlítása a küszöbértékkel
+		return distance < 0.01;
+	}
+
+
+	void setEndPoints() {
+		vec3 newP1 = vec3(0, 0, -1); // Initialize with default values
+		vec3 newP2 = vec3(0, 0, -1);
+
+		// Calculate intersection points with each side of the box
+		float topX = (p2.x - p1.x) * (1 - p1.y) / (p2.y - p1.y) + p1.x;
+		vec3 top = vec3(topX, 1, 0);
+
+		float bottomX = (p2.x - p1.x) * (-1 - p1.y) / (p2.y - p1.y) + p1.x;
+		vec3 bottom = vec3(bottomX, -1, 0);
+
+		float leftY = (p2.y - p1.y) * (-1 - p1.x) / (p2.x - p1.x) + p1.y;
+		vec3 left = vec3(-1, leftY, 0);
+
+		float rightY = (p2.y - p1.y) * (1 - p1.x) / (p2.x - p1.x) + p1.y;
+		vec3 right = vec3(1, rightY, 0);
+
+		// Update endpoints if intersection points are within the box
+		if (topX >= -1 && topX <= 1) {
+			if (cmpVec3(newP1, vec3(0,0,-1))) {
+				newP1 = top;
+			}
+			else {
+				newP2 = top;
+			}
+		}
+
+		if (bottomX >= -1 && bottomX <= 1) {
+			if (cmpVec3(newP1, vec3(0, 0, -1)) ){
+				newP1 = bottom;
+			}
+			else {
+				newP2 = bottom;
+			}
+		}
+
+		if (leftY >= -1 && leftY <= 1) {
+			if (cmpVec3(newP1, vec3(0, 0, -1))) {
+				newP1 = left;
+			}
+			else {
+				newP2 = left;
+			}
+		}
+
+		if (rightY >= -1 && rightY <= 1) {
+			if (cmpVec3(newP1, vec3(0, 0, -1))) {
+				newP1 = right;
+			}
+			else {
+				newP2 = right;
+			}
+		}
+
+		p1 = newP1;
+		p2 = newP2;
+	}
+
+
+
+};
+
+bool cmpLine(const Line& l1, const Line& l2) {
+	if (l1.getP1().x == l2.getP1().x && l1.getP1().y == l2.getP1().y && l1.getP1().z == l2.getP1().z &&
+		l1.getP2().x == l2.getP2().x && l1.getP2().y == l2.getP2().y && l1.getP2().z == l2.getP2().z) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+
+// Function to calculate the distance between a point and a line defined by two points
+float distancePointToLine(const vec3& point, const vec3& linePoint1, const vec3& linePoint2) {
+	// Vector along the line
+	vec3 lineVec = linePoint2 - linePoint1;
+
+	// Vector from linePoint1 to the point
+	vec3 pointVec = point - linePoint1;
+
+	// Calculate the projection of pointVec onto lineVec
+	float projection = dot(pointVec, lineVec) / dot(lineVec, lineVec);
+
+	// Calculate the point on the line closest to the point
+	vec3 closestPoint = linePoint1 + lineVec * projection;
+
+	// Calculate the distance between the point and the closest point on the line
+	float dist = length(point - closestPoint);
+
+	return dist;
+}
+
+
+Line* cpyLine(Line l) {
+
+	Line* newLine = new Line();
+	newLine->setP1(l.getP1());
+	newLine->setP2(l.getP2());
+	return newLine;
+
+}
+
+
+class LineCollection : public Object {
+
+
+	public:
+	LineCollection() : Object() {}
+
+	void addLine(vec3 p1, vec3 p2) {
+		Line l = Line(p1, p2);
+		l.setEndPoints();
+		vtx.push_back(l.getP1());
+		vtx.push_back(l.getP2());
+		updateGPU();
+		
+	}
+
+	void Draw(vec3 color) {
+		Object::Draw(GL_LINES, color);
+	}
+
+	Line& findNearestLine(vec3 point) {
+
+		vec3* p1 = nullptr;
+		vec3* p2 = nullptr;
+		Line l;
+
+		float minDist = 1000; // Initialize with a large value
+		Line* nearest = nullptr; // Initialize with nullptr
+
+		for (int i = 0; i < vtx.size(); i += 2) { // Iterate over pairs of vertices
+			p1 = &vtx[i];
+			p2 = &vtx[i + 1];
+
+			l.setP1(*p1);
+			l.setP2(*p2);
+		
+			// Calculate distance from point to line
+			float dist = distancePointToLine(point, *p1, *p2);
+
+			if (dist < minDist) {
+				minDist = dist;
+				nearest = cpyLine(l); // Update nearest pointer
+			}
+		}
+
+		if (nearest && minDist < 0.02) // Check if nearest is not nullptr
+			return *nearest;
+		else
+			return Line(); // Return a default line
+	}
+	
+	
+};
+
+
+
+enum mode { LINE, DOT, MOVE, INTERSECTION };
+mode currentMode = mode::DOT;
+
+PointCollection * pc;
+LineCollection * lc;
+
+
+
+
 
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
-	glGenVertexArrays(1, &vao);	// get 1 vao id
-	glBindVertexArray(vao);		// make it active
+	pc = new PointCollection();
+	lc = new LineCollection();
 
-	unsigned int vbo;		// vertex buffer object
-	glGenBuffers(1, &vbo);	// Generate 1 buffer
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	// Geometry with 24 bytes (6 floats or 3 x 2 coordinates)
-	float vertices[] = { -0.8f, -0.8f, -0.6f, 1.0f, 0.8f, -0.2f };
-	glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-		sizeof(vertices),  // # bytes
-		vertices,	      	// address
-		GL_STATIC_DRAW);	// we do not change later
 
-	glEnableVertexAttribArray(0);  // AttribArray 0
-	glVertexAttribPointer(0,       // vbo -> AttribArray 0
-		2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
-		0, NULL); 		     // stride, offset: tightly packed
+	glPointSize(10.0f);
+	glLineWidth(3.0f);
+
+
+	Line l1 = Line(vec3(0.5, 0.5, 0), vec3(-0.5, -0.75, 0));
+	Line l2 = Line(vec3(-0.5, 0.5, 0), vec3(0.5, -0.5, 0));
+
+	printf("Intersection: %f, %f\n", l1.getIntersection(l2).x, l1.getIntersection(l2).y);
 
 	// create program for the GPU
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
@@ -90,30 +403,46 @@ void onInitialization() {
 
 // Window has become invalid: Redraw
 void onDisplay() {
-	glClearColor(0, 0, 0, 0);     // background color
+	glClearColor(0.32f, 0.32f, 0.32f, 1.0f);     // background color
 	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
-
-	// Set color to (0, 1, 0) = green
-	int location = glGetUniformLocation(gpuProgram.getId(), "color");
-	glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
 
 	float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
 							  0, 1, 0, 0,    // row-major!
 							  0, 0, 1, 0,
 							  0, 0, 0, 1 };
 
-	location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
+	int location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
 	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
 
-	glBindVertexArray(vao);  // Draw call
-	glDrawArrays(GL_TRIANGLES, 0 /*startIdx*/, 3 /*# Elements*/);
+	pc->Draw(vec3(1.0f, 0.0f, 0.0f));
+	lc->Draw(vec3(0.0f, 1.0f, 1.0f));
+
 
 	glutSwapBuffers(); // exchange buffers for double buffering
+
 }
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
+	switch (key)
+	{
+	case 'l':
+		currentMode = mode::LINE;
+		printf("Line mode\n");
+		break;
+	case'm':
+		currentMode = mode::MOVE;
+		printf("Move mode\n");
+		break;
+	case'i':
+		currentMode = mode::INTERSECTION;
+		printf("Intersection mode\n");
+		break;
+	case 'p':
+		currentMode = mode::DOT;
+		printf("Point mode\n");
+		break;
+	}
 }
 
 // Key of ASCII code released
@@ -125,29 +454,199 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	// Convert to normalized device space
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
-	printf("Mouse moved to (%3.2f, %3.2f)\n", cX, cY);
+	Line nearestLine;
+
+
+	switch (currentMode)
+	{
+	case LINE:
+		break;
+	case DOT:
+		break;
+	case MOVE:
+
+		nearestLine = lc->findNearestLine(vec3(cX, cY, 0));
+
+		if (nearestLine.getP2().z != -1) {
+
+
+			vec3 newP1;
+			vec3 newP2;
+
+
+			float m = (nearestLine.getP2().y - nearestLine.getP1().y) / (nearestLine.getP2().x - nearestLine.getP1().x);
+			float b = nearestLine.getP1().y - m * nearestLine.getP1().x;
+
+			float topX = 1 - b / m;
+			float bottomX = -1 - b / m;
+
+			float leftY = -1 * m + b;
+			float rightY = m + b;
+
+			if (topX >= -1 && topX <= 1) {
+				if (cmpVec3(newP1, vec3(0, 0, 0))) {
+					newP1 = vec3(topX, 1, 0);
+				}
+				else {
+					newP2 = vec3(topX, 1, 0);
+				}
+			}
+
+			if (bottomX >= -1 && bottomX <= 1) {
+				if (cmpVec3(newP1, vec3(0, 0, 0))) {
+					newP1 = vec3(bottomX, -1, 0);
+				}
+				else {
+					newP2 = vec3(bottomX, -1, 0);
+				}
+			}
+
+			if (leftY >= -1 && leftY <= 1) {
+				if (cmpVec3(newP1, vec3(0, 0, 0))) {
+					newP1 = vec3(-1, leftY, 0);
+				}
+				else {
+					newP2 = vec3(-1, leftY, 0);
+				}
+			}
+
+			if (rightY >= -1 && rightY <= 1) {
+				if (cmpVec3(newP1, vec3(0, 0, 0))) {
+					newP1 = vec3(1, rightY, 0);
+				}
+				else {
+					newP2 = vec3(1, rightY, 0);
+				}
+			}
+
+			nearestLine.setP1(newP1);
+			nearestLine.setP2(newP2);
+
+
+
+			lc->updateGPU();
+			glutPostRedisplay();
+		}
+		
+		break;
+	case INTERSECTION:
+		break;
+	default:
+		break;
+	}
+
+
+	
 }
+
+
+vec3 lp1 = NULL;
+vec3 lp2 = NULL;
+
+Line* l1 = nullptr;
+Line* l2 = nullptr;
+
 
 // Mouse click event
 void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
 	// Convert to normalized device space
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
+	vec3 nearestPoint;
+	vec3* intersection;
+	
+	Line * tmp = nullptr;
 
-	char * buttonStat;
+	char* buttonStat;
 	switch (state) {
-	case GLUT_DOWN: buttonStat = "pressed"; break;
-	case GLUT_UP:   buttonStat = "released"; break;
+	case GLUT_DOWN: 
+		buttonStat = "pressed";
+		break;
+	case GLUT_UP:  
+		buttonStat = "released";
+		break;
 	}
 
-	switch (button) {
-	case GLUT_LEFT_BUTTON:   printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);   break;
-	case GLUT_MIDDLE_BUTTON: printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY); break;
-	case GLUT_RIGHT_BUTTON:  printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);  break;
+	if (buttonStat == "pressed" && button == GLUT_LEFT_BUTTON) {
+	
+		switch (currentMode)
+		{
+		case LINE:
+
+		 nearestPoint = pc->findNearestPoint(vec3(cX, cY, 1));
+
+			if (nearestPoint.z != -1) {
+				if (cmpVec3(lp1, NULL)) {
+					lp1 = vec3(nearestPoint.x, nearestPoint.y, 0);
+				}
+				else {
+					if (!cmpVec3(lp1, vec3(nearestPoint.x, nearestPoint.y, 0))) {
+					lp2 = vec3(nearestPoint.x, nearestPoint.y, 0);
+					lc->addLine(lp1, lp2);
+
+					lp1 = NULL;
+					lp2 = NULL;
+				}
+				}
+			}
+			break;
+		case DOT:
+			pc->addPoint(vec3(cX, cY, 1));
+			break;
+		case MOVE:
+			break;
+		case INTERSECTION:
+
+			 tmp = &lc->findNearestLine(vec3(cX, cY, 0));
+
+			 if (tmp->getP2().z != -1) {
+
+				 if (l1 == nullptr) {
+					 l1 = tmp;
+					 printf("Line 1 selected\n");
+					 tmp = nullptr;
+				 }
+				 else {
+
+					 if (!cmpLine(*l1, *tmp)) {
+						 l2 = tmp;
+						 printf("Line 2 selected\n");
+						 tmp = nullptr;
+
+						 intersection = new vec3(l1->getIntersection(*l2));
+
+						 if (intersection->z != -1) {
+							 pc->addPoint(*intersection);
+							 printf("Intersection: %f, %f\n", intersection->x, intersection->y);
+						 }
+
+						 delete intersection;
+						 delete l1;
+						 delete l2;
+
+						 l1 = nullptr;
+						 l2 = nullptr;
+						 intersection = nullptr;
+					 
+					 }
+				 }
+			 }
+
+			
+
+			break;
+		default:
+			break;
+		}
+
 	}
+
+	glutPostRedisplay();
 }
 
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 }
+
+
