@@ -121,15 +121,15 @@ public:
 		float minDist = 1000;
 		vec3 nearest = vec3(0, 0, 0);
 
-		for (int i = 0; i < vtx.size(); i++) {
-				float dist = sqrt(pow(p.x - vtx[i].x, 2) + pow(p.y - vtx[i].y, 2));
+		for (size_t i = 0; i < vtx.size(); i++) {
+				float dist = (float) sqrt(pow(p.x - vtx[i].x, 2) + pow(p.y - vtx[i].y, 2));
 				if (dist < minDist) {
 					minDist = dist;
 					nearest = vtx[i];
 				}
 		}
 
-		float dist = sqrt(pow(p.x - nearest.x, 2) + pow(p.y - nearest.y, 2));
+		float dist = (float) sqrt(pow(p.x - nearest.x, 2) + pow(p.y - nearest.y, 2));
 
 		if (dist < 0.01) {
 
@@ -203,7 +203,7 @@ public:
 
 	bool isPointOnLine(const vec3& point) const {
 		// Az egyenes egyenlete
-		float distance = fabs((p2.y - p1.y) * point.x - (p2.x - p1.x) * point.y + p2.x * p1.y - p2.y * p1.x) /
+		float distance = (float) fabs((p2.y - p1.y) * point.x - (p2.x - p1.x) * point.y + p2.x * p1.y - p2.y * p1.x) /
 			sqrt((p2.y - p1.y) * (p2.y - p1.y) + (p2.x - p1.x) * (p2.x - p1.x));
 
 		// Távolság összehasonlítása a küszöbértékkel
@@ -343,7 +343,7 @@ class LineCollection : public Object {
 		float minDist = 1000; // Initialize with a large value
 		Line* nearest = nullptr; // Initialize with nullptr
 
-		for (int i = 0; i < vtx.size(); i += 2) { // Iterate over pairs of vertices
+		for (size_t i = 0; i < vtx.size(); i += 2) { // Iterate over pairs of vertices
 			p1 = &vtx[i];
 			p2 = &vtx[i + 1];
 
@@ -414,8 +414,10 @@ void onDisplay() {
 	int location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
 	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
 
-	pc->Draw(vec3(1.0f, 0.0f, 0.0f));
+
 	lc->Draw(vec3(0.0f, 1.0f, 1.0f));
+	pc->Draw(vec3(1.0f, 0.0f, 0.0f));
+	
 
 
 	glutSwapBuffers(); // exchange buffers for double buffering
@@ -449,12 +451,14 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 void onKeyboardUp(unsigned char key, int pX, int pY) {
 }
 
+
+Line * nearestLine;
 // Move mouse with key pressed
 void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
 	// Convert to normalized device space
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
-	Line nearestLine;
+	
 
 
 	switch (currentMode)
@@ -464,68 +468,49 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	case DOT:
 		break;
 	case MOVE:
+		nearestLine = &lc->findNearestLine(vec3(cX, cY, 0));
 
-		nearestLine = lc->findNearestLine(vec3(cX, cY, 0));
-
-		if (nearestLine.getP2().z != -1) {
-
-
-			vec3 newP1;
-			vec3 newP2;
+		if (nearestLine->getP2().z != -1) {
 
 
-			float m = (nearestLine.getP2().y - nearestLine.getP1().y) / (nearestLine.getP2().x - nearestLine.getP1().x);
-			float b = nearestLine.getP1().y - m * nearestLine.getP1().x;
+			float dummyX = 0.5f;
 
-			float topX = 1 - b / m;
-			float bottomX = -1 - b / m;
+			float m = (nearestLine->getP2().y - nearestLine->getP1().y) / (nearestLine->getP2().x - nearestLine->getP1().x);
+			float b = nearestLine->getP1().y - m * nearestLine->getP1().x;
 
-			float leftY = -1 * m + b;
-			float rightY = m + b;
+			float m2 = -1 / m;
+			float b2 = cY - m2 * cX;
 
-			if (topX >= -1 && topX <= 1) {
-				if (cmpVec3(newP1, vec3(0, 0, 0))) {
-					newP1 = vec3(topX, 1, 0);
-				}
-				else {
-					newP2 = vec3(topX, 1, 0);
-				}
-			}
+			vec3 midPoint = vec3((nearestLine->getP1().x + nearestLine->getP2().x) / 2, (nearestLine->getP1().y + nearestLine->getP2().y) / 2, 0);
+			vec3 translationVector = vec3(cX - midPoint.x, cY - midPoint.y, 0);
 
-			if (bottomX >= -1 && bottomX <= 1) {
-				if (cmpVec3(newP1, vec3(0, 0, 0))) {
-					newP1 = vec3(bottomX, -1, 0);
-				}
-				else {
-					newP2 = vec3(bottomX, -1, 0);
-				}
-			}
+			vec3 translatePoint1 = vec3(nearestLine->getP1().x + translationVector.x, nearestLine->getP1().y + translationVector.y, 0);
+			vec3 translatePoint2 = vec3(nearestLine->getP2().x + translationVector.x, nearestLine->getP2().y + translationVector.y, 0);
+	
 
-			if (leftY >= -1 && leftY <= 1) {
-				if (cmpVec3(newP1, vec3(0, 0, 0))) {
-					newP1 = vec3(-1, leftY, 0);
-				}
-				else {
-					newP2 = vec3(-1, leftY, 0);
+			std::vector <vec3> * newVtx = &lc->getVtx();
+			
+
+			for (size_t i = 0; i < newVtx->size(); i += 2)
+			{
+				if (cmpVec3(newVtx->at(i), nearestLine->getP1()) && cmpVec3(newVtx->at(i + 1), nearestLine->getP2()) || 
+					cmpVec3(newVtx->at(i), nearestLine->getP2()) && cmpVec3(newVtx->at(i + 1), nearestLine->getP1())) {
+
+					Line l;
+					l.setP1(translatePoint1);
+					l.setP2(translatePoint2);
+					l.setEndPoints();
+
+
+					newVtx->at(i) = l.getP1();
+					newVtx->at(i + 1) = l.getP2();
 				}
 			}
-
-			if (rightY >= -1 && rightY <= 1) {
-				if (cmpVec3(newP1, vec3(0, 0, 0))) {
-					newP1 = vec3(1, rightY, 0);
-				}
-				else {
-					newP2 = vec3(1, rightY, 0);
-				}
-			}
-
-			nearestLine.setP1(newP1);
-			nearestLine.setP2(newP2);
-
 
 
 			lc->updateGPU();
 			glutPostRedisplay();
+			
 		}
 		
 		break;
@@ -600,24 +585,20 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 			 tmp = &lc->findNearestLine(vec3(cX, cY, 0));
 
 			 if (tmp->getP2().z != -1) {
-
+				 
 				 if (l1 == nullptr) {
 					 l1 = tmp;
-					 printf("Line 1 selected\n");
 					 tmp = nullptr;
 				 }
 				 else {
 
 					 if (!cmpLine(*l1, *tmp)) {
 						 l2 = tmp;
-						 printf("Line 2 selected\n");
 						 tmp = nullptr;
 
 						 intersection = new vec3(l1->getIntersection(*l2));
-
 						 if (intersection->z != -1) {
 							 pc->addPoint(*intersection);
-							 printf("Intersection: %f, %f\n", intersection->x, intersection->y);
 						 }
 
 						 delete intersection;
