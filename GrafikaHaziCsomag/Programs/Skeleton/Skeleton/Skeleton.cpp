@@ -1,6 +1,5 @@
-﻿//=============================================================================================
-// Mintaprogram: Z�ld h�romsz�g. Ervenyes 2019. osztol.
-//
+//=============================================================================================
+// Mintaprogram: Zold haromszog. Ervenyes 2019. osztol.
 // A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
 // Tilos:
 // - mast "beincludolni", illetve mas konyvtarat hasznalni
@@ -18,8 +17,8 @@
 //
 // NYILATKOZAT
 // ---------------------------------------------------------------------------------------------
-// Nev    : 
-// Neptun : 
+// Nev    : Buga Peter
+// Neptun : G50RDF
 // ---------------------------------------------------------------------------------------------
 // ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
 // mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
@@ -33,7 +32,6 @@
 //=============================================================================================
 #include "framework.h"
 
-// vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
 const char* const vertexSource = R"(
 	#version 330
 	precision highp float;		// normal floats, makes no difference on desktop computers
@@ -46,7 +44,6 @@ const char* const vertexSource = R"(
 	}
 )";
 
-// fragment shader in GLSL
 const char* const fragmentSource = R"(
 	#version 330
 	precision highp float;	// normal floats, makes no difference on desktop computers
@@ -59,16 +56,15 @@ const char* const fragmentSource = R"(
 	}
 )";
 
-GPUProgram gpuProgram; // vertex and fragment shaders
+GPUProgram gpuProgram;
 
 class Object {
 protected:
-	unsigned int vao, vbo; // GPU
-	std::vector<vec3> vtx; // CPU
+	unsigned int vao, vbo;
+	std::vector<vec3> vtx;
 
 public:
 
-	//Constructor
 	Object() {
 		glGenVertexArrays(1, &vao);
 		glBindVertexArray(vao);
@@ -83,15 +79,12 @@ public:
 
 	std::vector<vec3>& getVtx() { return vtx; }
 
-	// CPU -> GPU
 	void updateGPU() {
 		glBindVertexArray(vao);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, vtx.size() * sizeof(vec3), &vtx[0], GL_DYNAMIC_DRAW);
 	}
 
-
-	// Draw
 	void Draw(int type, vec3 color) {
 		if (vtx.size() > 0) {
 			glBindVertexArray(vao);
@@ -119,7 +112,7 @@ public:
 
 	vec3 findNearestPoint(vec3 p) {
 		float minDist = 1000;
-		vec3 nearest = vec3(0, 0, 0);
+		vec3 nearest = vec3(0, 0, 1);
 
 		for (size_t i = 0; i < vtx.size(); i++) {
 				float dist = (float) sqrt(pow(p.x - vtx[i].x, 2) + pow(p.y - vtx[i].y, 2));
@@ -131,7 +124,7 @@ public:
 
 		float dist = (float) sqrt(pow(p.x - nearest.x, 2) + pow(p.y - nearest.y, 2));
 
-		if (dist < 0.01) {
+		if (dist < 0.03) {
 
 		return nearest;
 		}
@@ -173,7 +166,6 @@ public:
 	void setP1(vec3 p) { p1 = p; }
 	void setP2(vec3 p) { p2 = p; }
 
-	// Metszéspont meghatározása egy másik egyenessel
 	vec3 getIntersection(Line other) {
 	
 		float m1 = (p2.y - p1.y) / (p2.x - p1.x);
@@ -196,39 +188,30 @@ public:
 		else {
 			return vec3(0, 0, -1);
 		}
-
-		
-
 	}
 
 	bool isPointOnLine(const vec3& point) const {
-		// Az egyenes egyenlete
 		float distance = (float) fabs((p2.y - p1.y) * point.x - (p2.x - p1.x) * point.y + p2.x * p1.y - p2.y * p1.x) /
 			sqrt((p2.y - p1.y) * (p2.y - p1.y) + (p2.x - p1.x) * (p2.x - p1.x));
-
-		// Távolság összehasonlítása a küszöbértékkel
 		return distance < 0.01;
 	}
 
 
 	void setEndPoints() {
-		vec3 newP1 = vec3(0, 0, -1); // Initialize with default values
+		vec3 newP1 = vec3(0, 0, -1); 
 		vec3 newP2 = vec3(0, 0, -1);
-
-		// Calculate intersection points with each side of the box
 		float topX = (p2.x - p1.x) * (1 - p1.y) / (p2.y - p1.y) + p1.x;
-		vec3 top = vec3(topX, 1, 0);
+		vec3 top = vec3(topX, 1, 1);
 
 		float bottomX = (p2.x - p1.x) * (-1 - p1.y) / (p2.y - p1.y) + p1.x;
-		vec3 bottom = vec3(bottomX, -1, 0);
+		vec3 bottom = vec3(bottomX, -1, 1);
 
 		float leftY = (p2.y - p1.y) * (-1 - p1.x) / (p2.x - p1.x) + p1.y;
-		vec3 left = vec3(-1, leftY, 0);
+		vec3 left = vec3(-1, leftY, 1);
 
 		float rightY = (p2.y - p1.y) * (1 - p1.x) / (p2.x - p1.x) + p1.y;
-		vec3 right = vec3(1, rightY, 0);
+		vec3 right = vec3(1, rightY, 1);
 
-		// Update endpoints if intersection points are within the box
 		if (topX >= -1 && topX <= 1) {
 			if (cmpVec3(newP1, vec3(0,0,-1))) {
 				newP1 = top;
@@ -268,9 +251,6 @@ public:
 		p1 = newP1;
 		p2 = newP2;
 	}
-
-
-
 };
 
 bool cmpLine(const Line& l1, const Line& l2) {
@@ -284,21 +264,11 @@ bool cmpLine(const Line& l1, const Line& l2) {
 }
 
 
-// Function to calculate the distance between a point and a line defined by two points
 float distancePointToLine(const vec3& point, const vec3& linePoint1, const vec3& linePoint2) {
-	// Vector along the line
 	vec3 lineVec = linePoint2 - linePoint1;
-
-	// Vector from linePoint1 to the point
 	vec3 pointVec = point - linePoint1;
-
-	// Calculate the projection of pointVec onto lineVec
 	float projection = dot(pointVec, lineVec) / dot(lineVec, lineVec);
-
-	// Calculate the point on the line closest to the point
 	vec3 closestPoint = linePoint1 + lineVec * projection;
-
-	// Calculate the distance between the point and the closest point on the line
 	float dist = length(point - closestPoint);
 
 	return dist;
@@ -311,12 +281,9 @@ Line* cpyLine(Line l) {
 	newLine->setP1(l.getP1());
 	newLine->setP2(l.getP2());
 	return newLine;
-
 }
 
-
 class LineCollection : public Object {
-
 
 	public:
 	LineCollection() : Object() {}
@@ -326,8 +293,7 @@ class LineCollection : public Object {
 		l.setEndPoints();
 		vtx.push_back(l.getP1());
 		vtx.push_back(l.getP2());
-		updateGPU();
-		
+		updateGPU();	
 	}
 
 	void Draw(vec3 color) {
@@ -340,35 +306,33 @@ class LineCollection : public Object {
 		vec3* p2 = nullptr;
 		Line l;
 
-		float minDist = 1000; // Initialize with a large value
-		Line* nearest = nullptr; // Initialize with nullptr
+		float minDist = 1000; 
+		Line* nearest = nullptr; 
 
-		for (size_t i = 0; i < vtx.size(); i += 2) { // Iterate over pairs of vertices
+		for (size_t i = 0; i < vtx.size(); i += 2) { 
 			p1 = &vtx[i];
 			p2 = &vtx[i + 1];
 
 			l.setP1(*p1);
 			l.setP2(*p2);
 		
-			// Calculate distance from point to line
 			float dist = distancePointToLine(point, *p1, *p2);
 
 			if (dist < minDist) {
 				minDist = dist;
-				nearest = cpyLine(l); // Update nearest pointer
+				nearest = cpyLine(l); 
 			}
 		}
 
-		if (nearest && minDist < 0.02) // Check if nearest is not nullptr
+		if (nearest && minDist < 0.01) 
 			return *nearest;
-		else
-			return Line(); // Return a default line
-	}
-	
-	
+		else {
+			Line* l = new Line();
+			return *l;
+		}
+			
+	}	
 };
-
-
 
 enum mode { LINE, DOT, MOVE, INTERSECTION };
 mode currentMode = mode::DOT;
@@ -376,55 +340,39 @@ mode currentMode = mode::DOT;
 PointCollection * pc;
 LineCollection * lc;
 
-
-
-
-
-// Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	pc = new PointCollection();
 	lc = new LineCollection();
 
-
 	glPointSize(10.0f);
 	glLineWidth(3.0f);
 
-
-	Line l1 = Line(vec3(0.5, 0.5, 0), vec3(-0.5, -0.75, 0));
-	Line l2 = Line(vec3(-0.5, 0.5, 0), vec3(0.5, -0.5, 0));
-
-	printf("Intersection: %f, %f\n", l1.getIntersection(l2).x, l1.getIntersection(l2).y);
-
-	// create program for the GPU
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 
-// Window has become invalid: Redraw
-void onDisplay() {
-	glClearColor(0.32f, 0.32f, 0.32f, 1.0f);     // background color
-	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
 
-	float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-							  0, 1, 0, 0,    // row-major!
+void onDisplay() {
+	glClearColor(0.32f, 0.32f, 0.32f, 1.0f); 
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	float MVPtransf[4][4] = { 1, 0, 0, 0,    
+							  0, 1, 0, 0,    
 							  0, 0, 1, 0,
 							  0, 0, 0, 1 };
 
-	int location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
-	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
-
+	int location = glGetUniformLocation(gpuProgram.getId(), "MVP");	
+	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);
 
 	lc->Draw(vec3(0.0f, 1.0f, 1.0f));
 	pc->Draw(vec3(1.0f, 0.0f, 0.0f));
 	
-
-
-	glutSwapBuffers(); // exchange buffers for double buffering
+	glutSwapBuffers(); 
 
 }
 
-// Key of ASCII code pressed
+
 void onKeyboard(unsigned char key, int pX, int pY) {
 	switch (key)
 	{
@@ -447,20 +395,15 @@ void onKeyboard(unsigned char key, int pX, int pY) {
 	}
 }
 
-// Key of ASCII code released
 void onKeyboardUp(unsigned char key, int pX, int pY) {
 }
 
 
 Line * nearestLine;
-// Move mouse with key pressed
-void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+void onMouseMotion(int pX, int pY) {
+	float cX = 2.0f * pX / windowWidth - 1;
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	
-
-
 	switch (currentMode)
 	{
 	case LINE:
@@ -468,91 +411,63 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	case DOT:
 		break;
 	case MOVE:
-		nearestLine = &lc->findNearestLine(vec3(cX, cY, 0));
 
 		if (nearestLine->getP2().z != -1) {
-
-
-			float dummyX = 0.5f;
-
-			float m = (nearestLine->getP2().y - nearestLine->getP1().y) / (nearestLine->getP2().x - nearestLine->getP1().x);
-			float b = nearestLine->getP1().y - m * nearestLine->getP1().x;
-
-			float m2 = -1 / m;
-			float b2 = cY - m2 * cX;
-
-			vec3 midPoint = vec3((nearestLine->getP1().x + nearestLine->getP2().x) / 2, (nearestLine->getP1().y + nearestLine->getP2().y) / 2, 0);
+			vec3 midPoint = vec3((nearestLine->getP1().x + nearestLine->getP2().x) / 2, (nearestLine->getP1().y + nearestLine->getP2().y) / 2, 1);
 			vec3 translationVector = vec3(cX - midPoint.x, cY - midPoint.y, 0);
 
-			vec3 translatePoint1 = vec3(nearestLine->getP1().x + translationVector.x, nearestLine->getP1().y + translationVector.y, 0);
-			vec3 translatePoint2 = vec3(nearestLine->getP2().x + translationVector.x, nearestLine->getP2().y + translationVector.y, 0);
+			vec3 tP1 = vec3(nearestLine->getP1().x + translationVector.x, nearestLine->getP1().y + translationVector.y, 1);
+			vec3 tP2 = vec3(nearestLine->getP2().x + translationVector.x, nearestLine->getP2().y + translationVector.y, 1);
 	
 
 			std::vector <vec3> * newVtx = &lc->getVtx();
-			
 
 			for (size_t i = 0; i < newVtx->size(); i += 2)
 			{
-				if (cmpVec3(newVtx->at(i), nearestLine->getP1()) && cmpVec3(newVtx->at(i + 1), nearestLine->getP2()) || 
-					cmpVec3(newVtx->at(i), nearestLine->getP2()) && cmpVec3(newVtx->at(i + 1), nearestLine->getP1())) {
+				if ((cmpVec3(newVtx->at(i), nearestLine->getP1())  && cmpVec3(newVtx->at(i + 1), nearestLine->getP2())) ||
+					(cmpVec3(newVtx->at(i), nearestLine->getP2()) && cmpVec3(newVtx->at(i + 1), nearestLine->getP1()))) {
 
 					Line l;
-					l.setP1(translatePoint1);
-					l.setP2(translatePoint2);
+					l.setP1(tP1);
+					l.setP2(tP2);
 					l.setEndPoints();
+
+					nearestLine->setP1(tP1);
+					nearestLine->setP2(tP2);
+					nearestLine->setEndPoints();
 
 
 					newVtx->at(i) = l.getP1();
 					newVtx->at(i + 1) = l.getP2();
 				}
 			}
-
-
 			lc->updateGPU();
-			glutPostRedisplay();
-			
-		}
-		
+			glutPostRedisplay();		
+		}		
 		break;
 	case INTERSECTION:
 		break;
 	default:
 		break;
 	}
-
-
-	
 }
 
 
-vec3 lp1 = NULL;
-vec3 lp2 = NULL;
+vec3 lp1 (0,0,-1);
+vec3 lp2 (0,0,-1);
 
 Line* l1 = nullptr;
 Line* l2 = nullptr;
 
-
-// Mouse click event
-void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-	// Convert to normalized device space
-	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+void onMouse(int button, int state, int pX, int pY) { 
+	float cX = 2.0f * pX / windowWidth - 1;
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	vec3 nearestPoint;
 	vec3* intersection;
 	
 	Line * tmp = nullptr;
 
-	char* buttonStat;
-	switch (state) {
-	case GLUT_DOWN: 
-		buttonStat = "pressed";
-		break;
-	case GLUT_UP:  
-		buttonStat = "released";
-		break;
-	}
-
-	if (buttonStat == "pressed" && button == GLUT_LEFT_BUTTON) {
+	if (state == GLUT_DOWN && button == GLUT_LEFT_BUTTON) {
 	
 		switch (currentMode)
 		{
@@ -561,16 +476,16 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 		 nearestPoint = pc->findNearestPoint(vec3(cX, cY, 1));
 
 			if (nearestPoint.z != -1) {
-				if (cmpVec3(lp1, NULL)) {
-					lp1 = vec3(nearestPoint.x, nearestPoint.y, 0);
+				if (cmpVec3(lp1, vec3(0, 0, -1))) {
+					lp1 = vec3(nearestPoint.x, nearestPoint.y, 1);
 				}
 				else {
-					if (!cmpVec3(lp1, vec3(nearestPoint.x, nearestPoint.y, 0))) {
-					lp2 = vec3(nearestPoint.x, nearestPoint.y, 0);
+					if (!cmpVec3(lp1, vec3(nearestPoint.x, nearestPoint.y, 1))) {
+					lp2 = vec3(nearestPoint.x, nearestPoint.y, 1);
 					lc->addLine(lp1, lp2);
 
-					lp1 = NULL;
-					lp2 = NULL;
+					lp1 = vec3 (0, 0, -1);
+					lp2 = vec3(0, 0, -1);
 				}
 				}
 			}
@@ -579,10 +494,11 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 			pc->addPoint(vec3(cX, cY, 1));
 			break;
 		case MOVE:
+			nearestLine = &lc->findNearestLine(vec3(cX, cY, 1));
 			break;
 		case INTERSECTION:
 
-			 tmp = &lc->findNearestLine(vec3(cX, cY, 0));
+			 tmp = &lc->findNearestLine(vec3(cX, cY, 1));
 
 			 if (tmp->getP2().z != -1) {
 				 
@@ -612,9 +528,6 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 					 }
 				 }
 			 }
-
-			
-
 			break;
 		default:
 			break;
@@ -625,9 +538,7 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	glutPostRedisplay();
 }
 
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 }
 
 
