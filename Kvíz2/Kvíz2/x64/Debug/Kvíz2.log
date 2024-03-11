@@ -1,0 +1,11 @@
+﻿  Quiz3.cpp
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(62,9): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(65,29): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(91,35): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(92,31): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(92,66): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(94,16): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(94,44): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(123,12): warning C4244: 'initializing': conversion from 'unsigned __int64' to 'float', possible loss of data
+C:\Users\bugap\Documents\Grafika\Kvíz2\Kvíz2\Quiz3.cpp(107,1): warning C4715: 'CatmullRom::r': not all control paths return a value
+  Kvíz2.vcxproj -> C:\Users\bugap\Documents\Grafika\Kvíz2\x64\Debug\Kvíz2.exe
