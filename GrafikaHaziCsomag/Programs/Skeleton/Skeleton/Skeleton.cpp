@@ -1,5 +1,6 @@
 //=============================================================================================
-// Mintaprogram: Zold haromszog. Ervenyes 2019. osztol.
+// Mintaprogram: Zöld háromszög. Ervenyes 2019. osztol.
+//
 // A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
 // Tilos:
 // - mast "beincludolni", illetve mas konyvtarat hasznalni
@@ -17,7 +18,7 @@
 //
 // NYILATKOZAT
 // ---------------------------------------------------------------------------------------------
-// Nev    : Buga Peter
+// Nev    : Buga Péter
 // Neptun : G50RDF
 // ---------------------------------------------------------------------------------------------
 // ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
@@ -32,26 +33,21 @@
 //=============================================================================================
 #include "framework.h"
 
-// vertex shader in GLSL
-const char* vertexSource = R"(
-	#version 330				
-    precision highp float;
+// vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
+const char * const vertexSource = R"(
+	#version 330
+	precision highp float;		// normal floats, makes no difference on desktop computers
 
-	uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
-
-	layout(location = 0) in vec2 vertexPosition;	// Attrib Array 0
-	layout(location = 1) in vec3 vertexColor;	    // Attrib Array 1
-	
-	out vec3 color;									// output attribute
+	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
+	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
 
 	void main() {
-		color = vertexColor;														// copy color from input to output
-		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
+		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
 	}
 )";
 
 // fragment shader in GLSL
-const char* fragmentSource = R"(
+const char * const fragmentSource = R"(
 	#version 330
 	precision highp float;	// normal floats, makes no difference on desktop computers
 	
@@ -63,7 +59,7 @@ const char* fragmentSource = R"(
 	}
 )";
 
-// 2D camera
+
 class Camera2D {
 	vec2 wCenter; // center in world coordinates
 	vec2 wSize;   // width and height in world coordinates
@@ -86,17 +82,17 @@ enum mode {
 	Catmull
 };
 
-Camera2D camera;		// 2D camera
-GPUProgram gpuProgram;	// vertex and fragment shaders
+Camera2D camera;		
+GPUProgram gpuProgram;	
 mode currentMode = Lagrange;
-float tension = 0.0f;	
+float tension = 0.0f;
 
 class Curve {
 
 protected:
-	std::vector<vec3> cps; // control pts
-	unsigned int vao, vbo; // vertex array object, vertex buffer object
-	std::vector<vec3> vertices; // vertices to be drawn
+	std::vector<vec2> cps; 
+	unsigned int vao, vbo; 
+	std::vector<vec2> vertices; 
 
 public:
 
@@ -108,45 +104,69 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 	}
 
-	virtual vec3 r(float t) = 0;
-
-
-	void calcVertecies() {
-		vertices.clear();
-		for (int i = 0; i < 100; i++) {
-			float t = (float)i / 100;
-			vec3 p = r(t);
-			vertices.push_back(p);
-		}
+	virtual ~Curve() {
 	}
 
-	void updateGPU() {
-		
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3), &vertices[0], GL_DYNAMIC_DRAW);
-	}
+	virtual vec2 r(float t) = 0;
 
+
+	virtual void calcVertices() = 0;
 
 	void Draw() {
 
+		if (cps.size() > 0) {
 
-		glBindVertexArray(vao);
-		gpuProgram.setUniform(vec3(1.0f, 0.0f, 0.0f), "color");
+			mat4 MVPTransform = camera.V() * camera.P();
+			gpuProgram.setUniform(MVPTransform, "MVP");
+
+			
+			glBindVertexArray(vao);  // Draw call
+			glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
 
-		glBufferData(GL_ARRAY_BUFFER, cps.size() * sizeof(vec3), &cps[0], GL_DYNAMIC_DRAW);
-		glDrawArrays(GL_POINTS, 0, cps.size());
+			gpuProgram.setUniform(vec3(1.0f, 1.0f, 0.0f), "color");
+			glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec2), &vertices[0], GL_DYNAMIC_DRAW);
+			glDrawArrays(GL_LINE_STRIP, 0, vertices.size());
+
+			gpuProgram.setUniform(vec3(1.0f, 0.0f, 0.0f), "color");
+			glBufferData(GL_ARRAY_BUFFER, cps.size() * sizeof(vec2), &cps[0], GL_DYNAMIC_DRAW);
+			glDrawArrays(GL_POINTS, 0, cps.size());
+		}
 	}
 
+	void AddControlPoint(float cX, float cY) { 
+		
+		vec4 mVertex = vec4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
+		cps.push_back(vec2(mVertex.x, mVertex.y)); 
+		
+	
+	}
 
+	float distance(vec2 p1, vec2 p2) {
+		return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
+	}
 
+	vec2* pickPoint(float cX, float cY) {
+
+		vec4 mPoint = vec4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
+		vec2 point = vec2(mPoint.x, mPoint.y);
+
+		for (unsigned int i = 0; i < cps.size(); i++) {
+		
+			if (dot(cps[i] - point, cps[i] - point) < 0.1) {
+				return &cps[i];
+			}
+
+		}
+		return nullptr;
+	}
 };
 
 class BezierCurve : public Curve {
-	
+
 	float B(int i, float t) {
 		int n = cps.size() - 1; // n+1 pts!
 		float choose = 1;
@@ -155,138 +175,341 @@ class BezierCurve : public Curve {
 	}
 public:
 
-	void AddControlPoint(vec3 cp) { cps.push_back(cp); }
-	vec3 r(float t) {
-		vec3 rt(0, 0, 0);
-		for (int i = 0; i < cps.size(); i++) rt = rt + (cps[i] * B(i, t));
+	vec2 r(float t) {
+		vec2 rt(0, 0);
+		for ( unsigned int i = 0; i < cps.size(); i++) rt = rt + (cps[i] * B(i, t));
 		return rt;
+	}
+
+	void calcVertices() {
+		vertices.clear();
+		if (cps.size() > 1) {
+			for (int i = 0; i < 100; i++) {
+				float t = (float)i / 99;
+				vec2 p = r(t);
+				vertices.push_back(p);
+			}
+		}
 	}
 };
 
-class CatmullRom: public Curve {
-	std::vector<float> ts; // parameter (knot) values
+class CatmullRom : public Curve {
+	std::vector<float> ts;
+	std::vector<float> dst;
 
 public:
-	void AddControlPoint(vec3 cp, float t) {
-		cps.push_back(cp);
-		ts.push_back(t);
+	void AddControlPoint(float cX, float cY) {
+		
+		Curve::AddControlPoint(cX, cY);
+		
+		
+		if (cps.size() > 2) {
+
+			float dist2 = distance(cps[cps.size()-1], cps[cps.size()-2]);
+			dst.push_back( dst[dst.size()-1] + dist2);
+			ts.push_back(1);
+
+			for (unsigned int i = 0; i < ts.size()-1; i++) {
+;
+				ts[i] = dst[i] / dst[dst.size()-1];
+			}
+		}
+		else
+		{
+			if (cps.size() < 2) {
+				ts.push_back(0);
+				dst.push_back(0);
+			}
+			else
+			{
+				ts.push_back(1);
+				dst.push_back(distance( cps[0], cps[1]));
+			}
+		}
 	}
-	vec3 Hermite(vec3 p0, vec3 v0, float t0, vec3 p1, vec3 v1, float t1,
+	vec2 Hermite(vec2 p0, vec2 v0, float t0, vec2 p1, vec2 v1, float t1,
 		float t) {
 
-		vec3 a0 = p0;
-		vec3 a1 = v0;
+		vec2 a0 = p0;
+		vec2 a1 = v0;
 
-		vec3 a2 = ((3 * (p1 - p0)) / pow((t1 - t0), 2)) - ((v1 + (2 * v0)) / (t1 - t0));
-		vec3 a3 = (2 * (p0 - p1)) / (pow((t1 - t0), 3)) + ((v1 + v0) / (pow((t1 - t0), 2)));
-
-		return (a3 * (pow((t - t0), 3))) + (a2 * (pow((t - t0), 2))) + (a1 * (t - t0)) + a0;
+		vec2 a2 = ((3 * (p1 - p0)) / pow((t1 - t0), 2)) - ((v1 + (2 * v0)) / (t1 - t0));
+		vec2 a3 = (2 * (p0 - p1)) / (pow((t1 - t0), 3)) + ((v1 + v0) / (pow((t1 - t0), 2)));
+		return (a3  * (pow((t - t0), 3))) + (a2 * (pow((t - t0), 2))) + (a1 * (t - t0)) + a0;
 
 	}
-	vec3 r(float t) {
-		for (int i = 0; i < cps.size() - 1; i++)
+	vec2 r(float t) {
+		for (unsigned int i = 0; i < cps.size() - 1; i++) {
 			if (ts[i] <= t && t <= ts[i + 1]) {
-				vec3 v0 = 0.5 * ((cps[i + 1] - cps[i]) / (ts[i + 1] - ts[i])) + (cps[i] - cps[i - 1]) / (ts[i] - ts[i - 1]);
-				vec3 v1 = 0.5 * ((cps[i + 2] - cps[i + 1]) / (ts[i + 2] - ts[i + 1])) + (cps[i + 1] - cps[i]) / (ts[i + 1] - ts[i]);
+				
+				vec2 old;
 
+				if (i > 0) {
+					old = (cps[i] - cps[i - 1]) / (ts[i] - ts[i - 1]);
+				}
+				else
+				{
+					old = vec2(0, 0);
+				}
+
+				vec2 current = (cps[i + 1] - cps[i]) / (ts[i + 1] - ts[i]);
+
+				vec2 vNew;
+
+				if( i < cps.size() -2){
+					vNew = (cps[i + 2] - cps[i + 1]) / (ts[i + 2] - ts[i + 1]);
+				}
+				else
+				{
+					vNew = vec2(0, 0);
+				}
+	
+				vec2 v0 = ((1 - tension) / 2) * (old + current);
+				vec2 v1 = ((1 - tension) / 2) * (current + vNew);
+				
 				return Hermite(cps[i], v0, ts[i], cps[i + 1], v1, ts[i + 1], t);
 			}
+		}
+		return cps[0];
+	}
+
+	void calcVertices() {
+		vertices.clear();
+
+		if (cps.size() >= 2 ) {
+			for (int i = 0; i < 100; i++) {
+				
+				float nt = (float)i / 99;
+				float t = nt * (ts[ts.size() - 1]);
+				
+				vec2 p = r(t);
+				vertices.push_back(p);
+			}
+		}
+
 	}
 };
 
 class LagrangeCurve : public Curve {
-	std::vector<float> ts; // knots
+	std::vector<float> ts;
+	std::vector<float> dst; 
 
-	float L(int i, float t) {
+	float L(unsigned int i, float t) {
 		float Li = 1.0f;
-		for (int j = 0; j < cps.size(); j++)
+		for (unsigned int j = 0; j < cps.size(); j++)
 			if (j != i)
 				Li *= (t - ts[j]) / (ts[i] - ts[j]);
 		return Li;
 	}
 public:
-	void AddControlPoint(vec3 cp) {
-		float ti = cps.size(); // or something better
-		cps.push_back(cp); ts.push_back(ti);
+	void AddControlPoint(float cX, float cY) {
+
+	
+		Curve::AddControlPoint(cX, cY);
+
+
+		if (cps.size() > 2) {
+
+			float dist2 = distance(cps[cps.size() - 1], cps[cps.size() - 2]);
+			dst.push_back(dst[dst.size() - 1] + dist2);
+			ts.push_back(1);
+
+			for (unsigned int i = 0; i < ts.size() - 1; i++) {
+				;
+				ts[i] = dst[i] / dst[dst.size() - 1];
+			}
+		}
+		else
+		{
+			if (cps.size() < 2) {
+				ts.push_back(0);
+				dst.push_back(0);
+			}
+			else
+			{
+				ts.push_back(1);
+				dst.push_back(distance(cps[0], cps[1]));
+			}
+		}
+		
+		
 	}
-	vec3 r(float t) {
-		vec3 rt(0, 0, 0);
-		for (int i = 0; i < cps.size(); i++) rt = rt + cps[i] * L(i, t);
+
+	vec2 r(float t) {
+		vec2 rt(0, 0);
+		for (unsigned int i = 0; i < cps.size(); i++) rt = rt + cps[i] * L(i, t);
 		return rt;
+	}
+
+	void calcVertices() {
+		vertices.clear();
+
+		if (cps.size() > 1) {
+			for (int i = 0; i < 100; i++) {
+				float nt = (float)i / 99;
+				
+				float t = (ts[cps.size()-1]) * nt;
+				vec2 p = r(t);
+				vertices.push_back(p);
+			}
+		}
 	}
 };
 
-	
-
-
+LagrangeCurve * lc;
+BezierCurve * bc;
+CatmullRom * cm;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
-	glViewport(0, 0, windowWidth, windowHeight); 	// Position and size of the photograph on screen
+	glViewport(0, 0, windowWidth, windowHeight);
 
 	glPointSize(10.0f);
 	glLineWidth(2.0f);
 
+	lc = new LagrangeCurve();
+	bc = new BezierCurve();
+	cm = new CatmullRom();
 
-	LagrangeCurve lagrange;
-	lagrange.AddControlPoint(vec3(0, 0, 0));
-	lagrange.Draw();
-
-
-	
-	// create program for the GPU
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 
 
-// Window has become invalid: Redraw
 void onDisplay() {
-	glClearColor(0, 0, 0, 0);							// background color 
-	glClear(GL_COLOR_BUFFER_BIT); // clear the screen
+	glClearColor(0, 0, 0, 0);     
+	glClear(GL_COLOR_BUFFER_BIT); 
 
-
-
-	mat4 MVPTransform = camera.V() * camera.P();
-	gpuProgram.setUniform(MVPTransform, "MVP");
-
-	glutSwapBuffers();									// exchange the two buffers
+	switch (currentMode)
+	{
+	case Lagrange:
+		lc->calcVertices();
+		lc->Draw();
+		break;
+	case Bezier:
+		bc->calcVertices();
+		bc->Draw();
+		break;
+	case Catmull:
+		cm->calcVertices();
+		cm->Draw();
+		break;
+	default:
+		break;
+	}
+	glutSwapBuffers(); 
 }
 
-// Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
 	switch (key) {
-	case 's': camera.Pan(vec2(-1, 0)); break;
-	case 'd': camera.Pan(vec2(+1, 0)); break;
-	case 'e': camera.Pan(vec2(0, 1)); break;
-	case 'x': camera.Pan(vec2(0, -1)); break;
+	case 'P': camera.Pan(vec2(+1, 0));  break;
+	case 'p': camera.Pan(vec2(-1, 0)); break;
 	case 'z': camera.Zoom(1 / 1.1); break;
 	case 'Z': camera.Zoom(1.1f); break;
-	case 'l': currentMode = Lagrange; break;
-	case 'b': currentMode = Bezier; break;
-	case 'c': currentMode = Catmull; break;
+	case 'l': currentMode = Lagrange; delete lc; lc = new LagrangeCurve();  break;
+	case 'b': currentMode = Bezier; delete bc; bc = new BezierCurve(); break;
+	case 'c': currentMode = Catmull; delete cm; cm = new CatmullRom(); break;
 	case 'T': tension += 0.1f; break;
 	case 't': tension -= 0.1f; break;
 	}
 	glutPostRedisplay();
 }
 
-// Key of ASCII code released
+
 void onKeyboardUp(unsigned char key, int pX, int pY) {
+}
+
+vec2* point = nullptr;
+
+
+void onMouseMotion(int pX, int pY) {	
 	
+	float cX = 2.0f * pX / windowWidth - 1;	
+	float cY = 1.0f - 2.0f * pY / windowHeight;
+
+	if (point != nullptr) {
+
+		vec4 hPoint = vec4(cX, cY, 0,1) * camera.Pinv() * camera.Vinv();
+		point->x = hPoint.x;
+		point->y = hPoint.y;
+	}
+
 	glutPostRedisplay();
 
-}
-
-// Mouse click event
-void onMouse(int button, int state, int pX, int pY) {
 	
 }
 
-// Move mouse with key pressed
-void onMouseMotion(int pX, int pY) {
+
+
+void onMouse(int button, int state, int pX, int pY) { 
+	
+	float cX = 2.0f * pX / windowWidth - 1;	
+	float cY = 1.0f - 2.0f * pY / windowHeight;
+
+
+
+	if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+
+		vec2* testPoint = nullptr;
+
+		switch (currentMode)
+		{
+		case Lagrange:
+			testPoint = lc->pickPoint(cX, cY);
+
+			if (testPoint != nullptr) {
+				point = testPoint;
+			}
+			else {
+				point = nullptr;
+			}
+			testPoint = nullptr;
+			break;
+
+			break;
+		case Bezier:
+			testPoint = bc->pickPoint(cX, cY);
+
+			if (testPoint != nullptr) {
+				point = testPoint;
+			}
+			else {
+				point = nullptr;
+			}
+			testPoint = nullptr;
+			break;
+
+			break;
+		case Catmull:
+			testPoint = cm->pickPoint(cX, cY);
+
+			if (testPoint != nullptr) {
+				point = testPoint;
+			}
+			else {
+				point = nullptr;
+			}
+			testPoint = nullptr;
+			break;
+		}
+
+	}
+
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+		switch (currentMode)
+		{
+		case Lagrange:
+			lc->AddControlPoint(cX, cY);
+			break;
+		case Bezier:
+			bc->AddControlPoint(cX, cY);
+			break;
+		case Catmull:
+			cm->AddControlPoint(cX, cY);
+			break;
+		default:
+			break;
+		}
 }
 
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
-	
 }
